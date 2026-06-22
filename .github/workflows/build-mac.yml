@@ -10,6 +10,9 @@ jobs:
   build-mac:
     runs-on: macos-latest
 
+    env:
+      HAS_CERT: ${{ secrets.MAC_CERT_P12_BASE64 != '' }}
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -31,10 +34,10 @@ jobs:
       # GitHub repo Settings > Secrets and variables > Actions:
       #   MAC_CERT_P12_BASE64, MAC_CERT_PASSWORD, APPLE_ID,
       #   APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
-      # ถ้าไม่มี ให้ลบ/คอมเมนต์ step นี้ทิ้ง แล้ว .pkg จะเป็นแบบ unsigned
+      # ถ้าไม่มี ให้ข้ามขั้นตอนนี้ .pkg จะเป็นแบบ unsigned
       # (ผู้ใช้เปิดเครื่องแรกต้องไปกด Allow ที่ System Settings > Privacy & Security)
       - name: Import code-signing certificate
-        if: ${{ secrets.MAC_CERT_P12_BASE64 != '' }}
+        if: env.HAS_CERT == 'true'
         env:
           MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
           MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
@@ -48,21 +51,22 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions $KEYCHAIN_PATH
           security list-keychains -d user -s $KEYCHAIN_PATH login.keychain
 
-      - name: Build .pkg installer
+      - name: Build .pkg installer (signed)
+        if: env.HAS_CERT == 'true'
         env:
-          # electron-builder จะ sign อัตโนมัติถ้าพบ identity ใน keychain
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CERT_P12_BASE64 != '' }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'true'
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if [ -z "${{ secrets.MAC_CERT_P12_BASE64 }}" ]; then
-            echo "Building unsigned .pkg installer..."
-            npx electron-builder --mac --config.mac.target=pkg --x64 --arm64 -c.mac.identity=null
-          else
-            echo "Building signed .pkg installer..."
-            npx electron-builder --mac --config.mac.target=pkg --x64 --arm64
-          fi
+          echo "Building signed .pkg installer..."
+          npx electron-builder --mac --config.mac.target=pkg --x64 --arm64
+
+      - name: Build .pkg installer (unsigned)
+        if: env.HAS_CERT != 'true'
+        run: |
+          echo "Building unsigned .pkg installer..."
+          npx electron-builder --mac --config.mac.target=pkg --x64 --arm64 -c.mac.identity=null
 
       - name: Upload .pkg artifact
         uses: actions/upload-artifact@v4
