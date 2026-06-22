@@ -34,7 +34,7 @@ jobs:
       # ถ้าไม่มี ให้ลบ/คอมเมนต์ step นี้ทิ้ง แล้ว .pkg จะเป็นแบบ unsigned
       # (ผู้ใช้เปิดเครื่องแรกต้องไปกด Allow ที่ System Settings > Privacy & Security)
       - name: Import code-signing certificate
-        if: ${{ env.MAC_CERT_P12_BASE64 != '' }}
+        if: ${{ secrets.MAC_CERT_P12_BASE64 != '' }}
         env:
           MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
           MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
@@ -55,7 +55,14 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npx electron-builder --mac --config.mac.target=pkg --x64 --arm64
+        run: |
+          if [ -z "${{ secrets.MAC_CERT_P12_BASE64 }}" ]; then
+            echo "Building unsigned .pkg installer..."
+            npx electron-builder --mac --config.mac.target=pkg --x64 --arm64 -c.mac.identity=null
+          else
+            echo "Building signed .pkg installer..."
+            npx electron-builder --mac --config.mac.target=pkg --x64 --arm64
+          fi
 
       - name: Upload .pkg artifact
         uses: actions/upload-artifact@v4
