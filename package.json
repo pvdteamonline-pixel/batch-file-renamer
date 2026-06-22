@@ -14,7 +14,8 @@
     "start": "npm run build && electron .",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
-    "dist:mac": "npm run build && electron-builder --mac --config.mac.target=pkg"
+    "dist:mac": "npm run build && electron-builder --mac --config.mac.target=pkg",
+    "dist:win": "npm run build && electron-builder --win --x64"
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0",
@@ -65,6 +66,25 @@
       "installLocation": "/Applications",
       "license": "build/license.txt",
       "overwriteAction": "upgrade"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Batch File Renamer"
     }
   }
 }
