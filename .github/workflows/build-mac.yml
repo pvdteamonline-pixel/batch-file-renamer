@@ -51,22 +51,37 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions $KEYCHAIN_PATH
           security list-keychains -d user -s $KEYCHAIN_PATH login.keychain
 
-      - name: Build .pkg installer (signed)
+      # --- Signed build ---
+      - name: Build .pkg installer (signed) x64
         if: env.HAS_CERT == 'true'
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'true'
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          echo "Building signed .pkg installer..."
-          npx electron-builder --mac --config.mac.target=pkg --x64 --arm64
+        run: npx electron-builder --mac --config.mac.target=pkg --x64
 
-      - name: Build .pkg installer (unsigned)
+      - name: Build .pkg installer (signed) arm64
+        if: env.HAS_CERT == 'true'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'true'
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npx electron-builder --mac --config.mac.target=pkg --arm64
+
+      # --- Unsigned build (workaround: build each arch separately to avoid electron-builder v24 temp-file cleanup bug) ---
+      - name: Build .pkg installer (unsigned) x64
         if: env.HAS_CERT != 'true'
         run: |
-          echo "Building unsigned .pkg installer..."
-          npx electron-builder --mac --config.mac.target=pkg --x64 --arm64 -c.mac.identity=null
+          echo "Building unsigned x64 .pkg..."
+          npx electron-builder --mac --config.mac.target=pkg --x64 -c.mac.identity=null
+
+      - name: Build .pkg installer (unsigned) arm64
+        if: env.HAS_CERT != 'true'
+        run: |
+          echo "Building unsigned arm64 .pkg..."
+          npx electron-builder --mac --config.mac.target=pkg --arm64 -c.mac.identity=null
 
       - name: Upload .pkg artifact
         uses: actions/upload-artifact@v4
