@@ -1,0 +1,6 @@
+Batch File Renamer - Software License Agreement
+
+This software is provided "as is", for offline use on macOS.
+By installing this application, you agree to use it at your own risk.
+
+© Your Company. All rights reserved.

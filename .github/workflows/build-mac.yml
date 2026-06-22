@@ -1,0 +1,73 @@
+name: Build macOS Installer (.pkg)
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch: {}
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer + electron (TypeScript)
+        run: npm run build
+
+      # --- Code signing (optional) ---
+      # ถ้ามี Apple Developer ID ให้ใส่ secrets เหล่านี้ใน
+      # GitHub repo Settings > Secrets and variables > Actions:
+      #   MAC_CERT_P12_BASE64, MAC_CERT_PASSWORD, APPLE_ID,
+      #   APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+      # ถ้าไม่มี ให้ลบ/คอมเมนต์ step นี้ทิ้ง แล้ว .pkg จะเป็นแบบ unsigned
+      # (ผู้ใช้เปิดเครื่องแรกต้องไปกด Allow ที่ System Settings > Privacy & Security)
+      - name: Import code-signing certificate
+        if: ${{ env.MAC_CERT_P12_BASE64 != '' }}
+        env:
+          MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          security create-keychain -p actions $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p actions $KEYCHAIN_PATH
+          echo "$MAC_CERT_P12_BASE64" | base64 --decode > $RUNNER_TEMP/cert.p12
+          security import $RUNNER_TEMP/cert.p12 -k $KEYCHAIN_PATH -P "$MAC_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productbuild
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions $KEYCHAIN_PATH
+          security list-keychains -d user -s $KEYCHAIN_PATH login.keychain
+
+      - name: Build .pkg installer
+        env:
+          # electron-builder จะ sign อัตโนมัติถ้าพบ identity ใน keychain
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CERT_P12_BASE64 != '' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npx electron-builder --mac --config.mac.target=pkg --x64 --arm64
+
+      - name: Upload .pkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: batch-file-renamer-pkg
+          path: release/*.pkg
+          if-no-files-found: error
+
+      - name: Attach to GitHub Release (เมื่อ push tag v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.pkg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
